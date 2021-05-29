@@ -1,13 +1,21 @@
 {
-    "name": "insaf/psr-file-cache",
+    "name": "iburangulov/psr-file-cache",
     "description": "PSR 16 Realization on files",
+    "version": "0.0.1",
+    "type": "library",
     "require": {
+        "php": ">=7.3",
         "psr/simple-cache": "^1.0"
     },
     "authors": [
         {
-            "name": "Burangulov",
+            "name": "Insaf Burangulov",
             "email": "iburanguloff@ya.ru"
         }
-    ]
+    ],
+    "autoload": {
+        "psr-4": {
+            "iburangulov\\fileCache\\": "src/"
+        }
+    }
 }
