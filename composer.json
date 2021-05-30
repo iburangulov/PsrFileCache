@@ -1,7 +1,7 @@
 {
   "name": "iburangulov/psr-file-cache",
   "description": "PSR 16 Realization on files",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "type": "library",
   "require": {
     "php": ">=7.3",
