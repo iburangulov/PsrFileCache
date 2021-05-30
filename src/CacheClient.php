@@ -50,7 +50,7 @@ final class CacheClient implements CacheInterface
      * Мета - данные о кэше
      * @var array
      */
-    private $metaData;
+    private $metaData = [];
 
     /**
      * Временные данные
@@ -81,7 +81,7 @@ final class CacheClient implements CacheInterface
 
         if (file_exists($f = $this->cachePath . DIRECTORY_SEPARATOR . self::SERVICE_FILE)) {
             if (!is_readable($f)) throw new FileCacheException('Недостаточно прав для чтения служебного файла кэша');
-            $this->metaData = json_decode(file_get_contents($f), true) ?? [];
+            $this->metaData = json_decode(file_get_contents($f), true) ?? ['awd'];
         }
 
         if (disk_free_space($this->cachePath) <= 8) throw new FileCacheException('Недостаточно места на диске для хранения кэша');
