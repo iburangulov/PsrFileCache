@@ -2,6 +2,7 @@
 
 namespace iburangulov\fileCache;
 
+use DateInterval;
 use Psr\SimpleCache\CacheInterface;
 
 final class CacheClient implements CacheInterface
@@ -21,7 +22,7 @@ final class CacheClient implements CacheInterface
      * Мета - данные о кэше
      * @var array
      */
-    private $metaData = [];
+    private $metaData;
 
     /**
      * Временные данные
@@ -52,7 +53,7 @@ final class CacheClient implements CacheInterface
 
         if (file_exists($f = $this->cachePath . DIRECTORY_SEPARATOR . self::SERVICE_FILE)) {
             if (!is_readable($f)) throw new FileCacheException('Недостаточно прав для чтения служебного файла кэша');
-            $this->metaData = json_decode(file_get_contents($f), true);
+            $this->metaData = json_decode(file_get_contents($f), true) ?? [];
         }
 
         if (disk_free_space($this->cachePath) <= 8) throw new FileCacheException('Недостаточно места на диске для хранения кэша');
@@ -125,13 +126,23 @@ final class CacheClient implements CacheInterface
             $meta['serialized'] = true;
         }
 
-        //TODO Добавить поддержку объектного представления TTL
-        if (is_object($ttl)) return false;
-
-        if ($t = (int)$ttl) {
-            $meta['ttl'] = $t;
+        if ($ttl)
+        {
             $meta['created'] = date('U');
+
+            if (is_int($ttl)) {
+                $meta['ttl'] = $ttl;
+            } elseif (is_object($ttl) && $ttl instanceof DateInterval) {
+                $daysInSeconds = abs($ttl->days) * 86400;
+                $hoursInSeconds = abs($ttl->format('%h')) * 3600;
+                $minutesInSeconds = abs($ttl->format('%i')) * 60;
+                $seconds = abs($ttl->format('%s'));
+                $meta['ttl'] = $daysInSeconds + $hoursInSeconds + $minutesInSeconds + $seconds;
+            } else {
+                throw new FileCacheException('Тип $ttl должен быть либо int либо реализацией класса \DateInterval');
+            }
         }
+
         $this->metaData[$k] = $meta;
         $this->temp['set'][$k] = $value;
 
