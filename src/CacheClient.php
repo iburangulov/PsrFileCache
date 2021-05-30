@@ -167,19 +167,46 @@ final class CacheClient implements CacheInterface
         $this->metaData = [];
     }
 
+    /**
+     * Получить массив значений по массиву ключей
+     * @param iterable $keys
+     * @param null $default
+     * @return iterable|void
+     */
     public function getMultiple($keys, $default = null)
     {
-        // TODO: Implement getMultiple() method.
+        $result = [];
+        foreach ($keys as $key) {
+            $result[$key] = $this->get($key, $default);
+        }
+        if (!$result) return $default;
+        return $result;
     }
 
-    public function setMultiple($values, $ttl = null)
+    /**
+     * Записать данные в кэш по ключ => значние
+     * @param iterable $values
+     * @param null $ttl
+     * @return void
+     */
+    public function setMultiple($values, $ttl = null): void
     {
-        // TODO: Implement setMultiple() method.
+        foreach ($values as $key => $value)
+        {
+            $this->set($key, $value, $ttl);
+        }
     }
 
-    public function deleteMultiple($keys)
+    /**
+     * Удалить массив ключей
+     * @param iterable $keys
+     * @return void
+     */
+    public function deleteMultiple($keys): void
     {
-        // TODO: Implement deleteMultiple() method.
+        foreach ($keys as $key) {
+            $this->delete($key);
+        }
     }
 
     /**
