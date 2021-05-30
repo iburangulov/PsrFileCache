@@ -158,9 +158,13 @@ final class CacheClient implements CacheInterface
         return true;
     }
 
-    public function clear()
+    /**
+     * Удалить все данные из кэша
+     * @return void
+     */
+    public function clear(): void
     {
-        // TODO: Implement clear() method.
+        $this->metaData = [];
     }
 
     public function getMultiple($keys, $default = null)
