@@ -1,8 +1,10 @@
 {
   "name": "iburangulov/psr-file-cache",
   "description": "PSR 16 Realization on files",
+  "keywords": ["psr", "psr-16", "cache", "file cache", "iburangulov", "php cache"],
   "version": "1.0.0",
   "type": "library",
+  "license": "MIT",
   "require": {
     "php": ">=7.3",
     "psr/simple-cache": "^1.0",
