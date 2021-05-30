@@ -5,6 +5,34 @@ namespace iburangulov\fileCache;
 use DateInterval;
 use Psr\SimpleCache\CacheInterface;
 
+use function rtrim;
+use function is_dir;
+use function mkdir;
+use function is_readable;
+use function is_writable;
+use function file_exists;
+use function json_encode;
+use function json_decode;
+use function file_get_contents;
+use function file_put_contents;
+use function disk_free_space;
+use function scandir;
+use function array_merge;
+use function array_keys;
+use function array_diff;
+use function sha1;
+use function array_key_exists;
+use function serialize;
+use function unserialize;
+use function settype;
+use function gettype;
+use function in_array;
+use function date;
+use function is_int;
+use function is_object;
+use function abs;
+use function unlink;
+
 final class CacheClient implements CacheInterface
 {
     /*
@@ -139,7 +167,7 @@ final class CacheClient implements CacheInterface
                 $seconds = abs($ttl->format('%s'));
                 $meta['ttl'] = $daysInSeconds + $hoursInSeconds + $minutesInSeconds + $seconds;
             } else {
-                throw new FileCacheException('Тип $ttl должен быть либо int либо реализацией класса \DateInterval');
+                throw new CacheInvalidArgumentException('Тип $ttl должен быть либо int либо реализацией класса \DateInterval');
             }
         }
 
