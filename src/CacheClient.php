@@ -55,10 +55,20 @@ final class CacheClient implements CacheInterface
             $this->metaData = json_decode(file_get_contents($f), true);
         }
 
-        if (disk_free_space($cachePath) <= 8) throw new FileCacheException('Недостаточно места на диске для хранения кэша');
+        if (disk_free_space($this->cachePath) <= 8) throw new FileCacheException('Недостаточно места на диске для хранения кэша');
 
         $this->temp['set'] = [];
         $this->temp['delete'] = [];
+
+        $cacheFiles = scandir($this->cachePath);
+        $protected = ['.', '..', self::SERVICE_FILE];
+        $cacheKeys = array_merge(array_keys($this->metaData), $protected);
+
+        if ($diff = array_diff($cacheKeys, $cacheFiles)) {
+            foreach ($diff as $item) {
+                unset($this->metaData[$item]);
+            }
+        }
     }
 
     /**
@@ -74,28 +84,26 @@ final class CacheClient implements CacheInterface
         $k = sha1($key);
 
         if (array_key_exists($k, $this->temp['set'])) return $this->temp['set'][$k];
-        if (file_exists($this->getCacheFile($key)))
-        {
+        if (array_key_exists($k, $this->loaded)) return $this->loaded[$k];
+
+        if (file_exists($this->getCacheFile($key))) {
             $data = file_get_contents($this->getCacheFile($key));
+            if (!array_key_exists($k, $this->metaData)) $this->metaData[$k] = ['type' => 'string'];
+            if ($this->isKeyExpired($key)) return $default;
 
-            if (array_key_exists($k, $this->metaData))
-            {
-                if (array_key_exists('serializaed', $this->metaData[$k])
-                    && $this->metaData[$k]['serializaed']
-                )
-                    $data = unserialize($data);
-
-                if ($this->isKeyExpired($key)) return $default;
-
-                if (array_key_exists('type', $this->metaData[$k]))
-                {
-                    settype($data, $this->metaData[$k]['type']);
-                }
+            if (array_key_exists('serialized', $this->metaData[$k])
+                && $this->metaData[$k]['serialized']) {
+                $data = unserialize($data);
             }
+
+            if (array_key_exists('type', $this->metaData[$k])) {
+                settype($data, $this->metaData[$k]['type']);
+            }
+
             $this->loaded[$k] = $data;
             return $data;
         }
-
+        return $default;
     }
 
     /**
@@ -110,11 +118,9 @@ final class CacheClient implements CacheInterface
         $k = sha1($key);
         if (in_array($k, $this->temp['delete'])) unset($this->temp['delete'][$k]);
 
-        $meta = [];
         $meta['type'] = gettype($value);
 
-        if (is_array($value))
-        {
+        if (is_array($value)) {
             $value = serialize($value);
             $meta['serialized'] = true;
         }
@@ -122,14 +128,14 @@ final class CacheClient implements CacheInterface
         //TODO Добавить поддержку объектного представления TTL
         if (is_object($ttl)) return false;
 
-        if ($ttl && is_int($ttl))
-        {
-            $meta['ttl'] = $ttl;
+        if ($t = (int)$ttl) {
+            $meta['ttl'] = $t;
             $meta['created'] = date('U');
         }
-
-        if ($meta) $this->metaData[$k] = $meta;
+        $this->metaData[$k] = $meta;
         $this->temp['set'][$k] = $value;
+
+        if (array_key_exists($k, $this->loaded)) unset($this->loaded[$k]);
 
         return true;
     }
@@ -141,13 +147,14 @@ final class CacheClient implements CacheInterface
      */
     public function delete($key): bool
     {
-        if (!$this->has($key)) return false;
-
         $k = sha1($key);
+
+        if (!$this->has($key) || in_array($k, $this->temp['delete'])) return false;
 
         if (array_key_exists($k, $this->metaData)) unset($this->metaData[$k]);
         if (array_key_exists($k, $this->temp['set'])) unset($this->temp['set'][$k]);
-        if (file_exists($f = $this->getCacheFile($key))) unlink($f);
+        if (array_key_exists($k, $this->loaded)) unset($this->loaded[$k]);
+        $this->temp['delete'][] = $k;
         return true;
     }
 
@@ -179,9 +186,8 @@ final class CacheClient implements CacheInterface
     public function has($key): bool
     {
         $k = sha1($key);
-        if (in_array($k, $this->temp['delete'])) return false;
-        elseif (array_key_exists($k, $this->temp['set'])) return true;
-        return file_exists($this->getCacheFile($key));
+        if (array_key_exists($k, $this->metaData) && !$this->isKeyExpired($key)) return true;
+        return false;
     }
 
     /**
@@ -189,7 +195,7 @@ final class CacheClient implements CacheInterface
      * @param $key
      * @return string
      */
-    private function getCacheFile($key, $alreadyCrypdedKey = false): string
+    private function getCacheFile(string $key, $alreadyCrypdedKey = false): string
     {
         $k = $alreadyCrypdedKey ? $key : sha1($key);
         return $this->cachePath . DIRECTORY_SEPARATOR . $k;
@@ -202,33 +208,40 @@ final class CacheClient implements CacheInterface
     {
         //Удаление просроченных ключей
         foreach ($this->metaData as $k => $meta) {
-            if ($this->isKeyExpired($k, true))
-            {
+            if ($this->isKeyExpired($k, true)) {
+                $this->temp['delete'][] = $k;
                 unset($this->metaData[$k]);
+                if (array_key_exists($k, $this->loaded)) unset($this->loaded[$k]);
                 if (array_key_exists($k, $this->temp['set'])) unset($this->temp['set'][$k]);
-                if (file_exists($f = $this->getCacheFile($k, true))) unlink($f);
             }
         }
 
         //Сохранение мета - данных
-        if ($this->metaData)
-            file_put_contents($this->cachePath . DIRECTORY_SEPARATOR . self::SERVICE_FILE, json_encode($this->metaData));
+        file_put_contents($this->cachePath . DIRECTORY_SEPARATOR . self::SERVICE_FILE,
+            $this->metaData ? json_encode($this->metaData) : '');
 
         //Сохранение данных
-        if ($this->temp['set'])
-        {
+        if ($this->temp['set']) {
             foreach ($this->temp['set'] as $k => $v) {
                 file_put_contents($this->getCacheFile($k, true), $v);
             }
         }
 
         //Удаление данных
-        if ($this->temp['delete'])
-        {
-            foreach ($this->temp as $item) {
-                unlink($this->getCacheFile($item, true));
+        if ($delete = $this->temp['delete']) {
+            foreach ($delete as $k => $item) {
+                if (file_exists($f = $this->getCacheFile($k, true))) unlink($f);
             }
         }
+
+        $cacheFiles = scandir($this->cachePath);
+        foreach ($cacheFiles as $cacheFile) {
+            $protected = ['.', '..', self::SERVICE_FILE];
+            if (!array_key_exists($cacheFile, $this->metaData) && !in_array($cacheFile, $protected)) {
+                unlink($this->getCacheFile($cacheFile, true));
+            }
+        }
+
     }
 
     /**
@@ -241,18 +254,19 @@ final class CacheClient implements CacheInterface
     {
         $k = $isCryptedKey ? $key : sha1($key);
 
-        if (array_key_exists($k, $this->metaData) &&
-            array_key_exists('ttl', $this->metaData[$k]) &&
-            array_key_exists('created', $this->metaData[$k])
-        ) {
-            $now = date('U');
-            $created = $this->metaData[$k]['created'];
-            $ttl = $this->metaData[$k]['ttl'];
+        if (array_key_exists($k, $this->metaData)) {
+            if (array_key_exists('ttl', $this->metaData[$k]) &&
+                array_key_exists('created', $this->metaData[$k])
+            ) {
+                $now = date('U');
+                $created = $this->metaData[$k]['created'];
+                $ttl = $this->metaData[$k]['ttl'];
 
-            if (($created + $ttl) < $now) return true;
+                if (($created + $ttl) < $now) return true;
+            }
+            return false;
         }
-
-        return false;
+        return true;
     }
 
     public function __destruct()
