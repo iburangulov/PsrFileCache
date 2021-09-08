@@ -76,8 +76,7 @@ final class CacheClient implements CacheInterface
         if (!is_dir($this->cachePath)) {
             if (@!mkdir($this->cachePath)) throw new FileCacheException('Не удалось создать директорию хранения кэша');
         }
-        if (!is_readable($this->cachePath)) throw new FileCacheException('Недостаточно прав для чтения кэша');
-        if (!is_writable($this->cachePath)) throw new FileCacheException('Недостаточно прав для записи кэша');
+        if (!is_readable($this->cachePath) || !is_writable($this->cachePath)) throw new FileCacheException('Недостаточно прав');
 
         if (file_exists($f = $this->cachePath . DIRECTORY_SEPARATOR . self::SERVICE_FILE)) {
             if (!is_readable($f)) throw new FileCacheException('Недостаточно прав для чтения служебного файла кэша');
